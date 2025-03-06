@@ -1,11 +1,15 @@
 # git setting
 
 git init
+
 git add .
+
 git commit -m "first commit"
 
 git branch -M main
+
 git remote add origin https://github.com/khsok212/projectServer.git
+
 git push -u origin main
 
 # Quasar App (quasar-project)

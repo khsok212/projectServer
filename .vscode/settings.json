@@ -1,0 +1,10 @@
+{
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": ["source.fixAll.eslint"],
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "vue"],
+  "svn.path": "C:\\Program Files\\TortoiseSVN\\bin\\svn.exe", // Windows에서 SVN 경로 지정
+  "svn.autorefresh": true // 자동 새로 고침
+}

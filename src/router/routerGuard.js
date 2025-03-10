@@ -1,5 +1,5 @@
 export function guardRoute(to, from, next) {
-  const accessToken = sessionStorage.getItem('access_token')
+  // const accessToken = sessionStorage.getItem('access_token')
   const roles = JSON.parse(sessionStorage.getItem('roles')) || []
 
   const userString = sessionStorage.getItem('user') // sessionStorage에서 user 가져오기
@@ -7,7 +7,7 @@ export function guardRoute(to, from, next) {
   const approvalStatus = user.approval_status !== undefined ? user.approval_status : '' // 승인 상태 체크
 
   // 로그인 여부 및 역할 확인
-  if (!accessToken) {
+  if (!userString) {
     if (to.path === '/login') {
       next() // 로그인 페이지에 접근할 경우 그대로 진행
     } else if (to.path === '/welcome') {

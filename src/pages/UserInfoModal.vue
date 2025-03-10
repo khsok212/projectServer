@@ -168,7 +168,7 @@ onMounted(async () => {
 // API 호출하여 사용자 정보 가져오기
 async function fetchUserInfo(userId) {
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/user/${userId}`, {
+    const response = await fetch(`http://localhost:8000/api/user/${userId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     })
@@ -222,7 +222,7 @@ async function submitForm() {
   }
 
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/user/${userInfo.value.user_id}`, {
+    const response = await fetch(`http://localhost:8000/api/user/${userInfo.value.user_id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userInfo.value),

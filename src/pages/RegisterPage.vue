@@ -136,7 +136,7 @@ export default defineComponent({
       }
 
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/users/check/${user_id.value}`)
+        const response = await axios.get(`http://localhost:8000/api/users/check/${user_id.value}`)
         if (response.data.available) {
           userIdAvailable.value = true
           $q.notify({
@@ -217,7 +217,7 @@ export default defineComponent({
       }
 
       try {
-        await axios.post('http://127.0.0.1:8000/users/', {
+        await axios.post('http://localhost:8000/users/', {
           user_id: user_id.value,
           name: name.value,
           email: email.value,

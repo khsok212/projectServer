@@ -63,6 +63,13 @@ const routes = [
           ),
       },
       {
+        path: '/admin/newAccessHistory',
+        component: () =>
+          import('pages/admin/NewAccessHistory.vue').catch((error) =>
+            console.error('Error loading NewAccessHistory:', error),
+          ),
+      },
+      {
         path: '/examples/inputPage',
         component: () =>
           import('pages/examples/inputPage.vue').catch((error) =>
@@ -116,6 +123,13 @@ const routes = [
         component: () =>
           import('pages/examples/echartPage1.vue').catch((error) =>
             console.error('Error loading echartPage1:', error),
+          ),
+      },
+      {
+        path: '/examples/tablePage',
+        component: () =>
+          import('pages/examples/tablePage.vue').catch((error) =>
+            console.error('Error loading tablePage:', error),
           ),
       },
     ],

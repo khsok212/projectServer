@@ -79,16 +79,16 @@
       />
     </div>
 
+    <!-- 테이블: 서버에서 받아온 현재 페이지 데이터만 표시 -->
     <q-table
       :rows="members"
       :columns="columns"
       row-key="user_id"
       :loading="loading"
-      :hide-pagination="false"
       :selection="isAdmin ? 'multiple' : 'none'"
       v-model:selected="selected"
-      :rows-per-page-options="[5, 10, 20, 50]"
-      v-model:pagination="pagination"
+      :hide-pagination="true"
+      :rows-per-page-options="[0]"
     >
       <template v-slot:body-cell-approval_status="props">
         <q-td
@@ -113,6 +113,36 @@
       </template>
     </q-table>
 
+    <!-- 페이지네이션 + 페이지당 개수 선택 -->
+    <div class="q-mt-md flex justify-between">
+      <!-- 페이지네이션 -->
+      <div class="q-mt-md flex-grow flex justify-center" style="flex-grow: 1">
+        <q-pagination
+          v-model="current"
+          :max="totalPages"
+          direction-links
+          flat
+          color="grey"
+          active-color="primary"
+          boundary-links
+          max-pages="5"
+        ></q-pagination>
+      </div>
+
+      <!-- 페이지당 개수 선택 -->
+      <div class="q-mt-md">
+        <q-select
+          v-model="rowsPerPage"
+          :options="[5, 10, 20, 40]"
+          label="Rows per page"
+          dense
+          outlined
+          style="width: 120px"
+        ></q-select>
+      </div>
+    </div>
+
+    <!-- 회원 상세 모달 -->
     <q-dialog v-model="memberPopup">
       <UserInfoModal :userId="selectedMemberId" @close="handleClose" />
     </q-dialog>
@@ -125,7 +155,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import RegisterPage from '@/pages/RegisterPage.vue'
 import UserInfoModal from '@/pages/UserInfoModal.vue'
 import { useQuasar } from 'quasar'
@@ -135,30 +165,37 @@ export default {
     RegisterPage,
     UserInfoModal,
   },
-  // props: {
-  //   userId: {
-  //     type: String,
-  //     required: true,
-  //   },
-  // },
   setup() {
     const $q = useQuasar()
     const loading = ref(true)
-    const filterUserId = ref('') // ID 필터
-    const filterName = ref('') // 이름 필터
-    const filterEmail = ref('') // 이메일 필터
-    const filterPhone = ref('') // 전화번호 필터
-    const filterApprovalStatus = ref('') // 기본값 설정
-    const filterRoleIds = ref([]) // 선택된 권한 ID를 배열로 저장
-    const members = ref([])
-    const selected = ref([])
-    const roles = ref(JSON.parse(sessionStorage.getItem('roles')) || [])
-    const pagination = ref({ page: 1, rowsPerPage: 10 }) // 기본 페이지당 행 수를 10으로 설정
 
+    // 필터 상태
+    const filterUserId = ref('')
+    const filterName = ref('')
+    const filterEmail = ref('')
+    const filterPhone = ref('')
+    const filterApprovalStatus = ref('')
+    const filterRoleIds = ref([])
+
+    // 테이블 데이터 & 페이징
+    const members = ref([]) // 서버에서 받은 현재 페이지 데이터
+    const totalCount = ref(0) // 서버에서 받은 전체 데이터 개수
+    const current = ref(1) // 현재 페이지
+    const rowsPerPage = ref(10) // 한 페이지당 표시 개수
+
+    // 총 페이지 수
+    const totalPages = computed(() => Math.ceil(totalCount.value / rowsPerPage.value))
+
+    // 선택된 행(회원)
+    const selected = ref([])
+
+    // 역할/권한
+    const roles = ref(JSON.parse(sessionStorage.getItem('roles')) || [])
     const isAdmin = computed(() => roles.value.includes(0))
-    const registerMemberPopup = ref(false) // 모달 상태
-    const memberPopup = ref(false) // 모달 상태
-    const selectedMemberId = ref(null) // 선택한 멤버의 ID를 저장할 ref
+
+    const registerMemberPopup = ref(false)
+    const memberPopup = ref(false)
+    const selectedMemberId = ref(null)
 
     const approvalStatusOptions = [
       { label: '승인', value: 'Y' },
@@ -171,6 +208,7 @@ export default {
       { label: '일반사용자', value: 2 },
     ]
 
+    // 테이블 컬럼 정의
     const columns = [
       { name: 'index', label: '순번', align: 'left', field: 'index', sortable: true },
       { name: 'user_id', label: 'ID', align: 'left', field: 'user_id', sortable: true },
@@ -186,7 +224,7 @@ export default {
         sortable: true,
       },
       {
-        name: 'role_ids', // 역할 컬럼 추가
+        name: 'role_ids',
         label: '권한',
         align: 'left',
         field: 'role_ids',
@@ -200,13 +238,11 @@ export default {
       },
     ]
 
-    // 회원 목록 조회 함수 (필터 적용)
+    // 서버에서 현재 페이지 데이터만 받아오는 함수
     const fetchMembers = async () => {
       loading.value = true
       try {
-        const token = sessionStorage.getItem('access_token')
-
-        // 필터 값으로 쿼리스트링 생성
+        // 필터 + 페이징 파라미터
         const queryParams = new URLSearchParams({
           user_id: filterUserId.value.trim(),
           name: filterName.value.trim(),
@@ -217,12 +253,15 @@ export default {
             filterRoleIds.value && filterRoleIds.value.length > 0
               ? filterRoleIds.value.join(',')
               : '',
+          // 페이지 & 페이지당 개수
+          page: current.value,
+          limit: rowsPerPage.value,
         })
 
-        const response = await fetch(`http://127.0.0.1:8000/api/users?${queryParams}`, {
+        const response = await fetch(`http://localhost:8000/api/users?${queryParams}`, {
           method: 'GET',
+          credentials: 'include',
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         })
@@ -231,12 +270,18 @@ export default {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
 
+        // 서버가 { items: [...], totalCount: ... } 형태로 응답한다고 가정
         const data = await response.json()
 
-        members.value = data.map((member, index) => ({
+        // 현재 페이지 데이터
+        members.value = data.items.map((member, index) => ({
           ...member,
-          index: index + 1,
+          // 순번 필드는 (index + 1) 형태로 부여
+          index: (current.value - 1) * rowsPerPage.value + index + 1,
         }))
+
+        // 전체 데이터 개수
+        totalCount.value = data.totalCount
       } catch (error) {
         console.error('데이터 불러오기 실패:', error)
       } finally {
@@ -244,14 +289,26 @@ export default {
       }
     }
 
+    // 페이지나 rowsPerPage가 바뀔 때마다 다시 조회
+    watch([current, rowsPerPage], () => {
+      fetchMembers()
+    })
+
+    // 처음 진입 시 조회
+    onMounted(() => {
+      fetchMembers()
+    })
+
+    // 회원등록 / 상세 모달 닫힌 뒤 재조회
     const handleClose = async () => {
-      registerMemberPopup.value = false // 팝업 닫기
-      memberPopup.value = false // 팝업 닫기
-      await fetchMembers() // 회원 목록 다시 조회
+      registerMemberPopup.value = false
+      memberPopup.value = false
+      await fetchMembers()
     }
 
+    // 날짜 포맷
     const formatDate = (timestamp) => {
-      const date = new Date(timestamp) // timestamp를 Date 객체로 변환
+      const date = new Date(timestamp)
       return date
         .toLocaleString('ko-KR', {
           year: 'numeric',
@@ -260,20 +317,22 @@ export default {
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          hour12: false, // 12시간제 사용 여부 (false는 24시간제)
+          hour12: false,
         })
-        .replace(/\./g, '-') // 날짜 형식에서 점(.)을 하이픈(-)으로 변경
+        .replace(/\./g, '-')
     }
 
+    // 권한명
     const getRoleNames = (roleIds) => {
       const roleNames = {
         0: '슈퍼관리자',
         1: '관리자',
         2: '일반사용자',
       }
-      return roleIds.map((id) => roleNames[id] || '알 수 없음') // 역할 이름 변환
+      return roleIds.map((id) => roleNames[id] || '알 수 없음')
     }
 
+    // 선택한 회원 삭제
     const deleteSelectedMembers = async () => {
       if (!isAdmin.value || selected.value.length === 0) return
 
@@ -281,13 +340,12 @@ export default {
       if (!confirmed) return
 
       try {
-        const token = sessionStorage.getItem('access_token')
         const userIds = selected.value.map((member) => member.user_id)
 
-        const response = await fetch(`http://127.0.0.1:8000/api/users/`, {
+        const response = await fetch(`http://localhost:8000/api/users/`, {
           method: 'DELETE',
+          credentials: 'include',
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ user_ids: userIds }),
@@ -304,11 +362,7 @@ export default {
       }
     }
 
-    const handleRowClick = (row, event) => {
-      selectedMemberId.value = event.user_id // 선택한 멤버의 user_id 저장
-      console.log('selectedMemberId.value', selectedMemberId.value)
-    }
-
+    // 선택한 회원 승인
     const approveSelectedMembers = async () => {
       if (!isAdmin.value || selected.value.length === 0) return
 
@@ -320,13 +374,12 @@ export default {
       })
         .onOk(async () => {
           try {
-            const token = sessionStorage.getItem('access_token')
             const userIds = selected.value.map((member) => member.user_id)
 
-            const response = await fetch(`http://127.0.0.1:8000/api/users/approve`, {
+            const response = await fetch(`http://localhost:8000/api/users/approve`, {
               method: 'POST',
+              credentials: 'include',
               headers: {
-                Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({ user_ids: userIds }),
@@ -336,7 +389,7 @@ export default {
               throw new Error(`HTTP error! status: ${response.status}`)
             }
 
-            await fetchMembers() // ✅ 승인 후 회원 목록 다시 불러오기
+            await fetchMembers()
             selected.value = []
           } catch (error) {
             console.error('회원 승인 실패:', error)
@@ -347,8 +400,6 @@ export default {
         })
     }
 
-    onMounted(fetchMembers)
-
     return {
       loading,
       filterUserId,
@@ -357,22 +408,29 @@ export default {
       filterPhone,
       filterApprovalStatus,
       approvalStatusOptions,
+      filterRoleIds,
+      roleOptions,
+
       members,
+      totalCount,
+      current,
+      rowsPerPage,
+      totalPages,
       selected,
-      columns,
       isAdmin,
+
+      columns,
+
+      registerMemberPopup,
+      memberPopup,
+      selectedMemberId,
+
       fetchMembers,
       deleteSelectedMembers,
       approveSelectedMembers,
-      pagination,
+      handleClose,
       formatDate,
       getRoleNames,
-      roleOptions,
-      filterRoleIds,
-      registerMemberPopup,
-      memberPopup,
-      handleClose,
-      handleRowClick,
     }
   },
 }
@@ -400,7 +458,7 @@ export default {
 }
 
 .filter-item:last-child {
-  margin-left: auto; /* 마지막 필터 항목은 왼쪽 정렬을 풀고 오른쪽 정렬 */
+  margin-left: auto; /* 마지막 필터 항목 오른쪽 정렬 */
   min-width: 20px;
 }
 

@@ -1,7 +1,7 @@
 <template>
   <q-page class="q-pa-lg">
     <q-toolbar>
-      <q-toolbar-title>접속 이력</q-toolbar-title>
+      <q-toolbar-title>접속 이력&nbsp;&nbsp; {{ totalCount }} 건</q-toolbar-title>
     </q-toolbar>
 
     <div class="filter-container q-mb-md">
@@ -28,16 +28,23 @@
       </div>
       <div class="filter-item">
         <q-btn label="조회" color="primary" @click="fetchHistory" :loading="loading" />
+        <q-btn
+          icon="fa-solid fa-file-excel"
+          label="다운로드"
+          color="primary"
+          @click="downloadExcel"
+          :loading="loading"
+          style="margin-left: 7px"
+        />
       </div>
     </div>
-
     <q-table
       :rows="history"
       :columns="columns"
       row-key="index"
       :loading="loading"
-      :rows-per-page-options="[5, 10, 20, 50]"
-      v-model:pagination="pagination"
+      :rows-per-page-options="[0]"
+      :hide-pagination="true"
     >
       <template v-slot:body-cell-login_time="props">
         <q-td :props="props">
@@ -55,11 +62,40 @@
         </q-td>
       </template>
     </q-table>
+
+    <!-- 페이지네이션 + 페이지당 개수 선택 -->
+    <div class="q-mt-md flex justify-between">
+      <!-- 페이지네이션 -->
+      <div class="q-mt-md flex-grow flex justify-center" style="flex-grow: 1">
+        <q-pagination
+          v-model="current"
+          :max="totalPages"
+          max-pages="5"
+          direction-links
+          flat
+          color="grey"
+          active-color="primary"
+          boundary-links
+        ></q-pagination>
+      </div>
+
+      <!-- 페이지당 개수 선택 -->
+      <div class="q-mt-md">
+        <q-select
+          v-model="rowsPerPage"
+          :options="[5, 10, 20, 40]"
+          label="Rows per page"
+          dense
+          outlined
+          style="width: 120px"
+        ></q-select>
+      </div>
+    </div>
   </q-page>
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useQuasar } from 'quasar'
 
 export default {
@@ -71,9 +107,15 @@ export default {
     const filterRequestPath = ref('') // 요청 경로 필터
     const filterLoginDate = ref('') // 날짜 필터
     const history = ref([])
-    const pagination = ref({ page: 1, rowsPerPage: 10 })
     const blockedIps = ref([]) // 차단된 IP 목록
     const roles = ref(JSON.parse(sessionStorage.getItem('roles')) || [])
+
+    const totalCount = ref(0) // 서버에서 받은 전체 데이터 개수
+    const current = ref(1) // 현재 페이지
+    const rowsPerPage = ref(10) // 한 페이지당 표시 개수
+
+    // 총 페이지 수
+    const totalPages = computed(() => Math.ceil(totalCount.value / rowsPerPage.value))
 
     const isAdmin = computed(() => roles.value.includes(0))
 
@@ -115,9 +157,11 @@ export default {
           login_ip: filterLoginIp.value.trim(),
           request_path: filterRequestPath.value.trim(),
           login_time: filterLoginDate.value.trim(),
+          page: current.value, // 현재 페이지
+          limit: rowsPerPage.value, // 페이지 당 항목 수
         })
 
-        const response = await fetch(`http://localhost:8000/api/userHistory?${queryParams}`, {
+        const response = await fetch(`http://localhost:8000/api/newUserHistory?${queryParams}`, {
           method: 'GET',
           credentials: 'include',
           headers: {
@@ -128,18 +172,69 @@ export default {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
         const data = await response.json()
 
-        history.value = data.map((item, index) => {
+        history.value = data.items.map((item, index) => {
           return {
             ...item,
-            index: index + 1,
+            index: (current.value - 1) * rowsPerPage.value + index + 1,
           }
         })
+
+        // 전체 데이터 개수
+        totalCount.value = data.totalCount
       } catch (error) {
         console.error('접속 이력 불러오기 실패:', error)
       } finally {
         loading.value = false
       }
     }
+
+    // 엑셀 다운로드 함수
+    const downloadExcel = async () => {
+      loading.value = true
+      try {
+        const queryParams = new URLSearchParams({
+          user_id: filterUserId.value.trim(),
+          login_ip: filterLoginIp.value.trim(),
+          request_path: filterRequestPath.value.trim(),
+          login_time: filterLoginDate.value.trim(),
+          // 엑셀 다운로드는 전체 데이터를 받아오기 때문에 페이징 정보는 제외할 수 있음
+        })
+
+        const response = await fetch(`http://localhost:8000/api/excelDownload?${queryParams}`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', '접속이력.xlsx')
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } catch (error) {
+        console.error('엑셀 다운로드 실패:', error)
+      } finally {
+        loading.value = false
+      }
+    }
+
+    // 페이지나 rowsPerPage가 바뀔 때마다 다시 조회
+    watch([current, rowsPerPage], () => {
+      fetchHistory()
+    })
+
+    // 처음 진입 시 조회
+    onMounted(() => {
+      fetchHistory()
+    })
 
     // 차단된 IP 목록을 가져오는 함수
     const fetchBlockedIps = async () => {
@@ -269,12 +364,16 @@ export default {
       history,
       columns,
       fetchHistory,
-      pagination,
       blockUser,
       toggleBlockStatus,
       blockedIps,
       isAdmin,
       formatDate,
+      totalCount,
+      current,
+      rowsPerPage,
+      totalPages,
+      downloadExcel,
     }
   },
 }

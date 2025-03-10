@@ -63,7 +63,83 @@ export default defineComponent({
 
     const login = async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/login/`, {
+        const response = await fetch(`http://localhost:8000/login/`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: user_id.value.trim(),
+            password: password.value,
+          }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+
+          if (result.status === 'block') {
+            $q.notify({
+              message: '차단된 IP 사용자입니다.',
+              color: 'red',
+              position: 'top',
+            })
+            return
+          }
+
+          // JWT 토큰은 이제 쿠키로 관리되므로, sessionStorage에서 토큰을 제거합니다.
+          // sessionStorage.removeItem('access_token') // 이전에 sessionStorage에 저장된 토큰 제거
+          sessionStorage.setItem('roles', JSON.stringify(result.roles)) // roles 저장
+          sessionStorage.setItem('user', JSON.stringify(result.user))
+
+          // 로그인 성공 시 MainLayout의 loginSuccess 함수 호출
+          props.loginSuccess(JSON.stringify(result.roles), JSON.stringify(result.user)) // props에서 loginSuccess를 호출하여 역할과 사용자 정보를 전달
+
+          $q.notify({
+            message: result.message,
+            color: 'green',
+            position: 'top',
+          })
+
+          router.push('/') // 로그인 성공 시 이동
+        } else {
+          console.error('로그인 실패:', response.statusText)
+          $q.dialog({
+            title: '로그인 실패',
+            message: '사용자 ID 또는 비밀번호를 확인하세요.',
+            color: 'red',
+            icon: 'warning',
+            ok: {
+              label: '확인',
+              color: 'negative',
+              handler: () => {
+                // 확인 버튼 클릭 시 실행할 코드
+              },
+            },
+          })
+        }
+      } catch (error) {
+        console.error('로그인 중 오류 발생:', error)
+
+        $q.dialog({
+          title: '로그인 오류',
+          message: '로그인 중 오류가 발생했습니다.',
+          color: 'red',
+          icon: 'warning',
+          ok: {
+            label: '확인',
+            color: 'negative',
+            handler: () => {
+              // 확인 버튼 클릭 시 실행할 코드
+            },
+          },
+        })
+      }
+    }
+
+    const loginToken = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/login/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -140,6 +216,7 @@ export default defineComponent({
       user_id,
       password,
       showRegisterModal,
+      loginToken,
       login,
     }
   },

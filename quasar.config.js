@@ -26,7 +26,7 @@ export default defineConfig((/* ctx */) => {
       // 'themify',
       // 'line-awesome',
       // 'roboto-font-latin-ext', // this or either 'roboto-font', NEVER both!
-
+      'fontawesome-v6',
       'roboto-font', // optional, you are not bound to it
       'material-icons', // optional, you are not bound to it
     ],
@@ -93,6 +93,7 @@ export default defineConfig((/* ctx */) => {
       config: {},
 
       iconSet: 'material-icons', // Quasar icon set
+      // iconSet: 'fontawesome-v6', // 또는 'fontawesome-v6' (최신 버전)
       // iconSet: 'mdi-v7',
       // lang: 'en-US', // Quasar language pack
 

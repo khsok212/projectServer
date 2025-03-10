@@ -31,6 +31,15 @@
             @click="goToAccessHistory"
             class="menu-button"
           />
+
+          <q-btn
+            v-if="hasMemberManagementRole"
+            flat
+            dense
+            label="접속 이력(페이징처리)"
+            @click="goToNewAccessHistory"
+            class="menu-button"
+          />
         </div>
 
         <div style="margin-left: auto">
@@ -68,6 +77,7 @@
         <EssentialLink title="chartjs" icon="edit" link="/examples/chartPage" />
         <EssentialLink title="echartjs" icon="edit" link="/examples/echartPage" />
         <EssentialLink title="echartjs1" icon="edit" link="/examples/echartPage1" />
+        <EssentialLink title="table" icon="edit" link="/examples/tablePage" />
 
         <!-- <EssentialLink title="접속 이력" icon="history" link="/admin/accessHistory" /> -->
       </q-list>
@@ -92,7 +102,7 @@ const $q = useQuasar()
 const router = useRouter()
 
 // 페이지 로드 시 sessionStorage에서 토큰과 역할 가져오기
-const accessToken = ref(sessionStorage.getItem('access_token'))
+// const accessToken = ref(sessionStorage.getItem('access_token'))
 const roles = ref(JSON.parse(sessionStorage.getItem('roles')) || []) // roles를 ref로 설정
 const user = ref(JSON.parse(sessionStorage.getItem('user')) || {}) // user를 ref로 설정
 
@@ -111,6 +121,10 @@ function goToAccessHistory() {
   router.push({ path: '/admin/accessHistory' }) // 접속 이력 페이지 경로 설정
 }
 
+function goToNewAccessHistory() {
+  router.push({ path: '/admin/newAccessHistory' }) // 접속 이력 페이지 경로 설정
+}
+
 function goToLoginPage() {
   router.push({ path: '/login' })
 }
@@ -120,11 +134,11 @@ function onLogoClick() {
 }
 
 const isLoggedIn = computed(() => {
-  return !!accessToken.value // access_token이 있으면 로그인 상태
+  return Object.keys(user.value).length > 0
 })
 
 const loginName = computed(() => {
-  return user.value.name // access_token이 있으면 로그인 상태
+  return user.value ? user.value.name : ''
 })
 
 // 권한 체크: roles 배열에 0이 포함되어 있는지 확인
@@ -136,7 +150,6 @@ const hasMemberManagementRole = computed(() => {
 })
 
 async function logout() {
-  // 'async' 추가
   // 로그아웃 히스토리 남기기
   const logoutHistory = {
     user_id: user.value.user_id, // 현재 사용자 ID
@@ -145,12 +158,11 @@ async function logout() {
   }
 
   try {
-    // 로그아웃 히스토리 API에 전송
-    const response = await fetch('http://127.0.0.1:8000/logout', {
-      // '/api/logout' 경로로 수정
+    // 로그아웃 히스토리 API에 전송 (쿠키가 함께 전송되도록 credentials 옵션 추가)
+    const response = await fetch('http://localhost:8000/logout', {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('access_token')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(logoutHistory),
@@ -180,13 +192,11 @@ async function logout() {
     })
   }
 
-  // 세션 스토리지에서 사용자 정보 제거
-  sessionStorage.removeItem('access_token')
-  sessionStorage.removeItem('roles') // roles도 제거
-  sessionStorage.removeItem('user') // user도 제거
+  // 세션 스토리지에서 더 이상 사용하지 않는 사용자 정보 제거 (토큰은 쿠키로 관리)
+  sessionStorage.removeItem('roles')
+  sessionStorage.removeItem('user')
 
   // 상태 초기화
-  accessToken.value = null // 상태 업데이트
   roles.value = [] // roles 배열 초기화
   user.value = {} // user 객체 초기화
 
@@ -194,12 +204,72 @@ async function logout() {
   router.push('/')
 }
 
+// async function logoutToken() {
+//   // 'async' 추가
+//   // 로그아웃 히스토리 남기기
+//   const logoutHistory = {
+//     user_id: user.value.user_id, // 현재 사용자 ID
+//     request_path: '/logout', // 로그아웃 경로
+//     memo: '로그아웃 성공', // 메모
+//   }
+
+//   try {
+//     // 로그아웃 히스토리 API에 전송
+//     const response = await fetch('http://localhost:8000/logout', {
+//       // '/api/logout' 경로로 수정
+//       method: 'POST',
+//       headers: {
+//         Authorization: `Bearer ${sessionStorage.getItem('access_token')}`,
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify(logoutHistory),
+//     })
+
+//     if (!response.ok) {
+//       throw new Error(`Failed to log out history: ${response.status}`)
+//     }
+
+//     // 성공적인 로그아웃 알림
+//     $q.notify({
+//       message: '로그아웃이 되었습니다.',
+//       color: 'green',
+//       position: 'top',
+//     })
+
+//     // 로그인 화면으로 리디렉션
+//     router.push('/')
+//   } catch (error) {
+//     console.error('Error logging out history:', error)
+
+//     // 로그아웃 실패 시 알림
+//     $q.notify({
+//       message: '로그아웃에 실패하였습니다.',
+//       color: 'red',
+//       position: 'top',
+//     })
+//   }
+
+//   // 세션 스토리지에서 사용자 정보 제거
+//   sessionStorage.removeItem('access_token')
+//   sessionStorage.removeItem('roles') // roles도 제거
+//   sessionStorage.removeItem('user') // user도 제거
+
+//   // 상태 초기화
+//   // accessToken.value = null // 상태 업데이트
+//   roles.value = [] // roles 배열 초기화
+//   user.value = {} // user 객체 초기화
+
+//   // 홈 화면으로 리디렉션
+//   router.push('/')
+// }
+
 // 로그인 성공 시 호출되는 함수
-function loginSuccess(token, newRoles, newUser) {
-  sessionStorage.setItem('access_token', token) // sessionStorage에 토큰 저장
+// function loginSuccess(token, newRoles, newUser) {
+function loginSuccess(newRoles, newUser) {
+  // sessionStorage.setItem('access_token', token) // sessionStorage에 토큰 저장
   sessionStorage.setItem('roles', JSON.stringify(newRoles)) // roles 배열을 JSON 문자열로 저장
   sessionStorage.setItem('user', newUser) // roles 배열을 JSON 문자열로 저장
-  accessToken.value = token // accessToken 업데이트
+  // accessToken.value = token // accessToken 업데이트
   roles.value = newRoles // roles 업데이트
   user.value = JSON.parse(sessionStorage.getItem('user')) || {} // user 업데이트
 }

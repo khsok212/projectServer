@@ -92,22 +92,40 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import EssentialLink from 'components/EssentialLink.vue'
 import { useQuasar } from 'quasar'
-import UserInfoModal from 'pages/UserInfoModal.vue' // UserInfoModal 컴포넌트 임포트
+import UserInfoModal from 'pages/UserInfoModal.vue'
 
 const $q = useQuasar()
 const router = useRouter()
 
-// 페이지 로드 시 sessionStorage에서 토큰과 역할 가져오기
-// const accessToken = ref(sessionStorage.getItem('access_token'))
-const roles = ref(JSON.parse(sessionStorage.getItem('roles')) || []) // roles를 ref로 설정
-const user = ref(JSON.parse(sessionStorage.getItem('user')) || {}) // user를 ref로 설정
+// sessionStorage에서 초기화 (없으면 빈 배열/객체, 만료 시각은 0)
+const roles = ref(JSON.parse(sessionStorage.getItem('roles')) || [])
+const user = ref(JSON.parse(sessionStorage.getItem('user')) || {})
+// tokenExpireTime: JWT 토큰이 만료되는 시각 (밀리초 단위 타임스탬프)
+const tokenExpireTime = ref(0)
 
-const leftDrawerOpen = ref(false) // 왼쪽 툴바를 처음에 닫힌 상태로 설정
-const userInfoModalOpen = ref(false) // 사용자 정보 모달 상태
+const leftDrawerOpen = ref(false)
+const userInfoModalOpen = ref(false)
+const logoutTimer = ref(null)
+const GRACE_PERIOD = 5000 // 5초 여유
+
+// 자동 로그아웃 타이머 설정 함수
+const setupAutoLogout = () => {
+  if (!tokenExpireTime.value) return
+
+  const remainingTime = tokenExpireTime.value - Date.now() - GRACE_PERIOD
+  console.log('remainingTime', remainingTime)
+  if (remainingTime <= 0) {
+    logout() // 이미 만료된 경우 즉시 로그아웃
+  } else {
+    logoutTimer.value = setTimeout(() => {
+      logout()
+    }, remainingTime)
+  }
+}
 
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value
@@ -118,11 +136,11 @@ function goToMemberManagement() {
 }
 
 function goToAccessHistory() {
-  router.push({ path: '/admin/accessHistory' }) // 접속 이력 페이지 경로 설정
+  router.push({ path: '/admin/accessHistory' })
 }
 
 function goToNewAccessHistory() {
-  router.push({ path: '/admin/newAccessHistory' }) // 접속 이력 페이지 경로 설정
+  router.push({ path: '/admin/newAccessHistory' })
 }
 
 function goToLoginPage() {
@@ -133,58 +151,49 @@ function onLogoClick() {
   router.push({ path: '/' })
 }
 
-const isLoggedIn = computed(() => {
-  return Object.keys(user.value).length > 0
-})
+const isLoggedIn = computed(() => Object.keys(user.value).length > 0)
+const loginName = computed(() => (user.value ? user.value.name : ''))
 
-const loginName = computed(() => {
-  return user.value ? user.value.name : ''
-})
-
-// 권한 체크: roles 배열에 0이 포함되어 있는지 확인
+// 권한 체크: roles 배열에 0(슈퍼관리자) 또는 1(관리자)와 승인 상태가 'Y'인 경우
 const hasMemberManagementRole = computed(() => {
-  return (
-    roles.value.includes(0) || // 슈퍼관리자 권한
-    (roles.value.includes(1) && user.value.approval_status === 'Y')
-  ) // 관리자 권한과 승인 상태 'Y'
+  return roles.value.includes(0) || (roles.value.includes(1) && user.value.approval_status === 'Y')
 })
 
+// 로그아웃 함수: 로그아웃 API 호출 후 세션스토리지와 반응형 변수 초기화
 async function logout() {
-  // 로그아웃 히스토리 남기기
   const logoutHistory = {
-    user_id: user.value.user_id, // 현재 사용자 ID
-    request_path: '/logout', // 로그아웃 경로
-    memo: '로그아웃 성공', // 메모
+    user_id: user.value.user_id,
+    request_path: '/logout',
+    memo: '로그아웃 성공',
   }
 
   try {
-    // 로그아웃 히스토리 API에 전송 (쿠키가 함께 전송되도록 credentials 옵션 추가)
     const response = await fetch('http://localhost:8000/logout', {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logoutHistory),
     })
 
-    if (!response.ok) {
+    if (response.status === 401) {
+      $q.notify({
+        message: '세션이 종료되었습니다.',
+        color: 'red',
+        position: 'top',
+      })
+    } else if (!response.ok) {
       throw new Error(`Failed to log out history: ${response.status}`)
+    } else {
+      $q.notify({
+        message: '로그아웃이 되었습니다.',
+        color: 'green',
+        position: 'top',
+      })
     }
 
-    // 성공적인 로그아웃 알림
-    $q.notify({
-      message: '로그아웃이 되었습니다.',
-      color: 'green',
-      position: 'top',
-    })
-
-    // 로그인 화면으로 리디렉션
-    router.push('/')
+    router.push('/login')
   } catch (error) {
     console.error('Error logging out history:', error)
-
-    // 로그아웃 실패 시 알림
     $q.notify({
       message: '로그아웃에 실패하였습니다.',
       color: 'red',
@@ -192,92 +201,47 @@ async function logout() {
     })
   }
 
-  // 세션 스토리지에서 더 이상 사용하지 않는 사용자 정보 제거 (토큰은 쿠키로 관리)
   sessionStorage.removeItem('roles')
   sessionStorage.removeItem('user')
+  sessionStorage.removeItem('token_expire_time')
 
-  // 상태 초기화
-  roles.value = [] // roles 배열 초기화
-  user.value = {} // user 객체 초기화
-
-  // 홈 화면으로 리디렉션
-  router.push('/')
+  roles.value = []
+  user.value = {}
+  tokenExpireTime.value = ref(0)
 }
-
-// async function logoutToken() {
-//   // 'async' 추가
-//   // 로그아웃 히스토리 남기기
-//   const logoutHistory = {
-//     user_id: user.value.user_id, // 현재 사용자 ID
-//     request_path: '/logout', // 로그아웃 경로
-//     memo: '로그아웃 성공', // 메모
-//   }
-
-//   try {
-//     // 로그아웃 히스토리 API에 전송
-//     const response = await fetch('http://localhost:8000/logout', {
-//       // '/api/logout' 경로로 수정
-//       method: 'POST',
-//       headers: {
-//         Authorization: `Bearer ${sessionStorage.getItem('access_token')}`,
-//         'Content-Type': 'application/json',
-//       },
-//       body: JSON.stringify(logoutHistory),
-//     })
-
-//     if (!response.ok) {
-//       throw new Error(`Failed to log out history: ${response.status}`)
-//     }
-
-//     // 성공적인 로그아웃 알림
-//     $q.notify({
-//       message: '로그아웃이 되었습니다.',
-//       color: 'green',
-//       position: 'top',
-//     })
-
-//     // 로그인 화면으로 리디렉션
-//     router.push('/')
-//   } catch (error) {
-//     console.error('Error logging out history:', error)
-
-//     // 로그아웃 실패 시 알림
-//     $q.notify({
-//       message: '로그아웃에 실패하였습니다.',
-//       color: 'red',
-//       position: 'top',
-//     })
-//   }
-
-//   // 세션 스토리지에서 사용자 정보 제거
-//   sessionStorage.removeItem('access_token')
-//   sessionStorage.removeItem('roles') // roles도 제거
-//   sessionStorage.removeItem('user') // user도 제거
-
-//   // 상태 초기화
-//   // accessToken.value = null // 상태 업데이트
-//   roles.value = [] // roles 배열 초기화
-//   user.value = {} // user 객체 초기화
-
-//   // 홈 화면으로 리디렉션
-//   router.push('/')
-// }
 
 // 로그인 성공 시 호출되는 함수
-// function loginSuccess(token, newRoles, newUser) {
-function loginSuccess(newRoles, newUser) {
-  // sessionStorage.setItem('access_token', token) // sessionStorage에 토큰 저장
-  sessionStorage.setItem('roles', JSON.stringify(newRoles)) // roles 배열을 JSON 문자열로 저장
-  sessionStorage.setItem('user', newUser) // roles 배열을 JSON 문자열로 저장
-  // accessToken.value = token // accessToken 업데이트
-  roles.value = newRoles // roles 업데이트
-  user.value = JSON.parse(sessionStorage.getItem('user')) || {} // user 업데이트
+// expireTimestamp: 토큰 만료 시각(밀리초 단위), newRoles: 역할 배열, newUser: 사용자 정보(JSON 문자열)
+function loginSuccess(expireTimestamp, newRoles, newUser) {
+  sessionStorage.setItem('roles', JSON.stringify(newRoles))
+  sessionStorage.setItem('user', newUser)
+  sessionStorage.setItem('token_expire_time', expireTimestamp.toString())
+
+  roles.value = newRoles
+  user.value = JSON.parse(newUser) || {}
+  tokenExpireTime.value = Number(expireTimestamp) || 0
+
+  setupAutoLogout() // 로그인 후 타이머 재설정
 }
 
-// 사용자 정보 모달 열기
 function openUserInfoModal() {
   userInfoModalOpen.value = true
 }
+
+onMounted(() => {
+  // 페이지 로드 시 sessionStorage에서 토큰 만료 시각을 읽어 타이머를 설정
+  const storedExpireTime = Number(sessionStorage.getItem('token_expire_time'))
+  if (storedExpireTime) {
+    tokenExpireTime.value = storedExpireTime
+    setupAutoLogout()
+  }
+})
+
+onUnmounted(() => {
+  if (logoutTimer.value) {
+    clearTimeout(logoutTimer.value)
+  }
+})
 </script>
 
 <style>

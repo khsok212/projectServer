@@ -231,11 +231,6 @@ export default {
       fetchHistory()
     })
 
-    // 처음 진입 시 조회
-    onMounted(() => {
-      fetchHistory()
-    })
-
     // 차단된 IP 목록을 가져오는 함수
     const fetchBlockedIps = async () => {
       try {

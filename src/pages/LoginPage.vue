@@ -87,13 +87,21 @@ export default defineComponent({
             return
           }
 
+          // token_expire_min(분 단위)를 받아서 만료 시각 계산
+          const expireMin = result.token_expire_min // 예: 30
+          const expireTimestamp = Date.now() + expireMin * 60 * 1000 // 밀리초 단위
+
           // JWT 토큰은 이제 쿠키로 관리되므로, sessionStorage에서 토큰을 제거합니다.
           // sessionStorage.removeItem('access_token') // 이전에 sessionStorage에 저장된 토큰 제거
           sessionStorage.setItem('roles', JSON.stringify(result.roles)) // roles 저장
           sessionStorage.setItem('user', JSON.stringify(result.user))
 
           // 로그인 성공 시 MainLayout의 loginSuccess 함수 호출
-          props.loginSuccess(JSON.stringify(result.roles), JSON.stringify(result.user)) // props에서 loginSuccess를 호출하여 역할과 사용자 정보를 전달
+          props.loginSuccess(
+            expireTimestamp,
+            JSON.stringify(result.roles),
+            JSON.stringify(result.user),
+          ) // props에서 loginSuccess를 호출하여 역할과 사용자 정보를 전달
 
           $q.notify({
             message: result.message,

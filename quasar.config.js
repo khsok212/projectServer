@@ -61,6 +61,12 @@ export default defineConfig((/* ctx */) => {
       // extendViteConf (viteConf) {},
       // viteVuePluginOptions: {},
 
+      extendViteConf(viteConf) {
+        viteConf.optimizeDeps = {
+          ...(viteConf.optimizeDeps || {}),
+          exclude: ['vue-class-component', 'vue-property-decorator'],
+        }
+      },
       vitePlugins: [
         [
           'vite-plugin-checker',

@@ -42,6 +42,13 @@ const routes = [
           ),
       },
       {
+        path: '/admin/menuManagement',
+        component: () =>
+          import('pages/admin/MenuManagement.vue').catch((error) =>
+            console.error('Error loading MenuManagement:', error),
+          ),
+      },
+      {
         path: 'request',
         component: () =>
           import('pages/ApprovalRequest.vue').catch((error) =>
@@ -130,6 +137,13 @@ const routes = [
         component: () =>
           import('pages/examples/tablePage.vue').catch((error) =>
             console.error('Error loading tablePage:', error),
+          ),
+      },
+      {
+        path: '/examples/tabulatorPage',
+        component: () =>
+          import('pages/examples/tabulatorPage.vue').catch((error) =>
+            console.error('Error loading tabulatorPage:', error),
           ),
       },
     ],

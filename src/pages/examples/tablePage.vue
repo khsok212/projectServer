@@ -1,5 +1,12 @@
 <template>
   <div class="q-pa-md">
+    <q-btn
+      label="Export to Excel"
+      color="primary"
+      class="q-ml-md"
+      icon="download"
+      @click="exportToExcel"
+    />
     <q-table
       title="Treats"
       :rows="paginatedRows"
@@ -39,7 +46,8 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import * as XLSX from 'xlsx'
 
 export default {
   setup() {
@@ -189,6 +197,32 @@ export default {
       return rows.value.slice(start, start + rowsPerPage.value)
     })
 
+    const filterText = ref('') // 검색어
+
+    // ✅ 엑셀 다운로드 기능
+    const exportToExcel = () => {
+      let worksheet = XLSX.utils.json_to_sheet(filteredRows.value)
+      let workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Desserts')
+      XLSX.writeFile(workbook, 'desserts.xlsx')
+    }
+
+    // ✅ 필터링 적용
+    const filteredRows = computed(() => {
+      if (!filterText.value) return rows.value
+
+      return rows.value.filter((row) => {
+        return Object.values(row).some((value) =>
+          String(value).toLowerCase().includes(filterText.value.toLowerCase()),
+        )
+      })
+    })
+
+    // ✅ 필터링 변경 시 자동 적용
+    watch(filterText, () => {
+      current.value = 1 // 검색 시 첫 페이지로 이동
+    })
+
     return {
       columns,
       rows,
@@ -196,15 +230,39 @@ export default {
       rowsPerPage,
       totalPages,
       paginatedRows,
+      exportToExcel,
     }
   },
 }
 </script>
 
 <style scoped>
-/* :deep(.q-table__top),
-:deep(.q-table__bottom),
-:deep(thead tr:first-child th) {
-  background-color: #9dddf8;
-} */
+/* 테이블 디자인 개선 */
+.q-table {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* 홀수/짝수 행 배경색 변경 */
+:deep(tbody tr:nth-child(odd)) {
+  background-color: #f9f9f9;
+}
+
+:deep(tbody tr:nth-child(even)) {
+  background-color: #ffffff;
+}
+
+/* 검색창 스타일 */
+.q-input {
+  width: 250px;
+  max-width: 300px;
+}
+
+/* 버튼 스타일 */
+.q-btn {
+  min-width: 150px;
+  font-weight: bold;
+  text-transform: none;
+}
 </style>
